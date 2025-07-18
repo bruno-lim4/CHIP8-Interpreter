@@ -3,6 +3,9 @@
 
 typedef struct chip8_ CHIP8;
 
-void setDefaultFont(CHIP8* chip8);
+CHIP8* setupInterpreter(char* file_path);
+
+
+void printMemory(CHIP8* chip8);
 
 #endif
