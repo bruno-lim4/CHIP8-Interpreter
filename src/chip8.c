@@ -2,13 +2,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <errno.h>
+
 #include "chip8.h"
+#include "display.h"
+
+#define X   (uint8_t) 0x0f00
+#define Y   (uint8_t) 0x00f0
+#define N   (uint8_t) 0x000f
+#define NN  (uint8_t) 0x00ff
+#define NNN (uint8_t) 0x0fff
 
 #define MEMORY_SIZE 4096
-#define DISPLAY_WEIGHT 64
-#define DISPLAY_HEIGHT 32
+
+/*
+ THIS IS RELATED TO THE AMBIGUOUS INSTRUCTION 8XY6/8XYE
+ 0: THE OLD WAY
+ 1: THE MODERN WAY
+*/
+#define SHIFT_MODE 1
 
 struct chip8_ {
     // 4kb memory
@@ -18,7 +30,7 @@ struct chip8_ {
     uint16_t stack[32];
 
     // display with monocromatic color (0 or 1)
-    bool display[DISPLAY_HEIGHT][DISPLAY_WEIGHT];
+    DISPLAY* display;
     
     // special registers
     uint16_t pc, idx;
@@ -29,24 +41,211 @@ struct chip8_ {
     uint8_t v[16];
 };
 
-void setDefaultFont(CHIP8* chip8);
+void processNextInstruction(CHIP8* chip8) {
+    // get the instrucion pointed by PC
+    uint16_t inst = (chip8->memory[chip8->pc] << 8)|(chip8->memory[chip8->pc+1]);
+    chip8->pc += 2; // update PC
 
-void executeNextInstruction(CHIP8* chip8) {
-    // fetch
+    uint8_t optype = ( (uint8_t)0xf000 )  & inst;
 
+    uint8_t x = (inst & X) >> 8;
+    uint8_t y = (inst & Y) >> 4;
+    uint8_t n = (inst & N);
+    uint8_t nn = (inst & NN);
+    uint16_t nnn = (inst & NNN);
+
+    switch (optype) {
+        case 0x0:
+            switch (nnn) {
+                case 0x0EE: 
+                    // 00EE - pops stack and sets pc to it
+                    break;
+                case 0x0E0:
+                    // 00E0 - clear the display (sets all the pixels to 0)
+                    break;
+                default:
+                    break;
+            }
+
+            break;
+        
+        case 0x1:
+            // 1NNN - sets PC to NNN
+            break;
+
+        case 0x2:
+            // 2NNN - calls the subroutine at NNN, pushing the current PC to the stack
+            break;
+
+        case 0x3:
+            // 3XNN - skips one instruction if register v[X] is equal to NN
+            break;
+
+        case 0x4:
+            // 4XNN - skips one instruction if register v[X] is NOT equal to NN
+            break;
+
+        case 0x5:
+            // 5XY0 - skips one instruction if register v[X] is equal to v[Y]
+            break;
+
+        case 0x6:
+            // 6XNN - sets the register v[X] to NN 
+            break;
+
+        case 0x7:
+            // 7XNN - adds the value NN to v[X] (carry flag is not affected)
+            break;
+
+        case 0x8:
+            switch (n) {
+                case 0x0:
+                    // 8XY0 - sets v[X] to the value of v[Y]
+                    break;
+                
+                case 0x1:
+                    // 8XY1 - sets v[X] = v[X] | v[Y]
+                    break;
+                
+                case 0x2:
+                    // 8XY2 - sets v[X] = v[X] & v[Y]
+                    break;
+                
+                case 0x3:
+                    // 8XY3 - sets v[X] = v[X] ^ v[Y]
+                    break;
+
+                case 0x4:
+                    // 8XY4 - sets v[X] = v[X] + v[Y] (if overflow -> flag register is set to 1)
+                    break;
+
+                case 0x5:
+                    // 8XY5 - sets v[X] = v[X] - v[Y] (if v[Y] > v[X], flag is 0, otherwise flag is 1)
+                    break;
+
+                case 0x6:
+                    // 8XY6 - if !SHIFT_MODE (v[X] = v[Y]) -> v[x] >>= 1 and sets flag to the bit that was shifted out
+                    break;
+
+                case 0x7:
+                    // 8XY7 - sets v[X] = v[Y] - v[X] (if v[X] > v[Y], flag is 0, otherwise flag is 1)
+                    break;
+
+                case 0xE:
+                    // 8XYE - if !SHIFT_MODE (v[X] = v[Y]) -> v[x] <<= 1 and sets flag to the bit that was shifted out
+                    break;
+
+                default:
+                    break;
+            }
+            break;
+
+        case 0x9:
+            // 9XY0 - skips one instruction if register v[X] is NOT equal to v[Y]
+            break;
+
+        case 0xA:
+            // ANNN - sets idx register to NNN
+            break;
+
+        case 0xB:
+            // BNNN - (ambiguous, implementing the most common way) - jumps to address NNN plus v[0]
+            break;
+
+        case 0xC:
+            // CXNN - generates a random number, ANDs with NN, and puts the result in v[X]
+            break;
+
+        case 0xD:
+            // DXYN - draw to the screen (complex)
+            break;
+        
+        case 0xE:
+            switch(nn) {
+                case 0x9E:
+                    // EX9E - skips one instruction if the key corresponding to the value in v[X] is pressed
+                    break;
+
+                case 0xA1:
+                    // EXA1 - skips one instruction if the key corresponding to the value in v[X] is NOT pressed
+                    break;
+
+                default:
+                    break;
+            }
+            break;
+            
+        case 0xF:
+            switch(nn) {
+                case 0x07:
+                    // FX07 - sets v[X] to the current value of the delay timer
+                    break;
+
+                case 0x15:
+                    // FX15 - sets the delay timer to the value in v[X]
+                    break;
+
+                case 0x18:
+                    // FX18 - sets the sound timer to the value in v[X]
+                    break;
+
+                case 0x1E:
+                    // FX1E - sets idx = v[X] + idx (flag is set to 1 if idx overflows (> 0x0FFF) - this is ambiguous)
+                    break;
+
+                case 0x0A:
+                    // FX0A - blocking instruction until a key is pressed - sets v[X] to its hex value
+                    break;
+
+                case 0x29:
+                    // FX29 - sets idx to the address of the hexadecimal character in v[X]
+                    break;
+                
+                case 0x33:
+                    // FX33 - takes the number in v[X] (decimal) and places its digits in idx, idx+1, ...
+                    break;
+                
+                case 0x55:
+                    // FX55 - stores [v0, v1, ..., vx] in idx, idx+1, ..., idx+x (DONT UPDATE IDX - MODERN WAY)
+                    break;
+                
+                case 0x65:
+                    // FX65 - takes the values stored in idx, idx+1, ... , idx+x and stores in v0, v1, ..., vx (DONT UPDATE IDX - MODERN WAY)
+                    break;
+
+                default:
+                    break;
+            }
+            break;  
+        
+        default:
+            break;
+    }
 }
+
+
+
+
+
+void setDefaultFont(CHIP8* chip8);
 
 CHIP8* setupInterpreter(char* file_path) {
     FILE* f = fopen(file_path, "rb");
     if (f == NULL) {
         fprintf(stderr, "ERROR: %s\n", strerror(errno));
-        exit(1);  // encerra com código de erro 1
+        exit(1);  
     }
 
     CHIP8* chip8 = (CHIP8*) malloc(sizeof(CHIP8));
     
+    // create the display
+    chip8->display = createDisplay();
+
     // write a font for hex values into the beginning of the chip8 memory
     setDefaultFont(chip8);
+
+    // set Program Counter to 0x200
+    chip8->pc = 0x200;
 
     // write the game file into chip8 memory
     for(int i = 0x200; i < MEMORY_SIZE; i++) {
@@ -86,6 +285,12 @@ void setDefaultFont(CHIP8* chip8) {
     for(int i = 0; i < 80; i++) {
         chip8->memory[i] = font[i];
     }
+}
+
+void freeInterpreter(CHIP8* chip8) {
+    free(chip8->display);
+    free(chip8);
+    return;
 }
 
 /*
