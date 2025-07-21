@@ -60,6 +60,8 @@ void processNextInstruction(CHIP8* chip8) {
             switch (nnn) {
                 case 0x0EE: 
                     // 00EE - pops stack and sets pc to it
+                    chip8->pc = chip8->stack[chip8->sp];
+                    chip8->sp++;
                     break;
                 case 0x0E0:
                     // 00E0 - clear the display (sets all the pixels to 0)
@@ -79,18 +81,24 @@ void processNextInstruction(CHIP8* chip8) {
 
         case 0x2:
             // 2NNN - calls the subroutine at NNN, pushing the current PC to the stack
+            chip8->sp--;
+            chip8->stack[chip8->sp] = chip8->pc;
+            chip8->pc = nnn;
             break;
 
         case 0x3:
             // 3XNN - skips one instruction if register v[X] is equal to NN
+            if (chip8->v[x] == nn) chip8->pc += 2;
             break;
 
         case 0x4:
             // 4XNN - skips one instruction if register v[X] is NOT equal to NN
+            if (chip8->v[x] != nn) chip8->pc += 2;
             break;
 
         case 0x5:
             // 5XY0 - skips one instruction if register v[X] is equal to v[Y]
+            if (chip8->v[x] == chip8->v[y]) chip8->pc += 2;
             break;
 
         case 0x6:
@@ -107,38 +115,64 @@ void processNextInstruction(CHIP8* chip8) {
             switch (n) {
                 case 0x0:
                     // 8XY0 - sets v[X] to the value of v[Y]
+                    chip8->v[x] = chip8->v[y];
                     break;
                 
                 case 0x1:
                     // 8XY1 - sets v[X] = v[X] | v[Y]
+                    chip8->v[x] |= chip8->v[y];
                     break;
                 
                 case 0x2:
                     // 8XY2 - sets v[X] = v[X] & v[Y]
+                    chip8->v[x] &= chip8->v[y];
                     break;
                 
                 case 0x3:
                     // 8XY3 - sets v[X] = v[X] ^ v[Y]
+                    chip8->v[x] ^= chip8->v[y];
                     break;
 
                 case 0x4:
                     // 8XY4 - sets v[X] = v[X] + v[Y] (if overflow -> flag register is set to 1)
+                    uint16_t res = chip8->v[x] + chip8->v[y];
+                    if (res > 0xff) chip8->v[15] = 1;
+                    chip8->v[x] += chip8->v[y];
+
                     break;
 
                 case 0x5:
                     // 8XY5 - sets v[X] = v[X] - v[Y] (if v[Y] > v[X], flag is 0, otherwise flag is 1)
+                    if (chip8->v[y] > chip8->v[x]) 
+                        chip8->v[15] = 0;
+                    else 
+                        chip8->v[15] = 1;
+                    
+                    chip8->v[x] -= chip8->v[y];
                     break;
 
                 case 0x6:
                     // 8XY6 - if !SHIFT_MODE (v[X] = v[Y]) -> v[x] >>= 1 and sets flag to the bit that was shifted out
+                    if (!SHIFT_MODE) chip8->v[x] = chip8->v[y];
+                    chip8->v[15] = 1&chip8->v[x];
+                    chip8->v[x] >>= 1;
                     break;
 
                 case 0x7:
                     // 8XY7 - sets v[X] = v[Y] - v[X] (if v[X] > v[Y], flag is 0, otherwise flag is 1)
+                    if (chip8->v[x] > chip8->v[y]) 
+                        chip8->v[15] = 0;
+                    else 
+                        chip8->v[15] = 1;
+                    
+                    chip8->v[x] = chip8->v[y] - chip8->v[x];
                     break;
 
                 case 0xE:
                     // 8XYE - if !SHIFT_MODE (v[X] = v[Y]) -> v[x] <<= 1 and sets flag to the bit that was shifted out
+                    if (!SHIFT_MODE) chip8->v[x] = chip8->v[y];
+                    chip8->v[15] = (1<<7)&chip8->v[x];
+                    chip8->v[x] <<= 1;
                     break;
 
                 default:
@@ -148,6 +182,7 @@ void processNextInstruction(CHIP8* chip8) {
 
         case 0x9:
             // 9XY0 - skips one instruction if register v[X] is NOT equal to v[Y]
+            if (chip8->v[x] != chip8->v[y]) chip8->pc += 2;
             break;
 
         case 0xA:
@@ -157,10 +192,12 @@ void processNextInstruction(CHIP8* chip8) {
 
         case 0xB:
             // BNNN - (ambiguous, implementing the most common way) - jumps to address NNN plus v[0]
+            chip8->pc = nnn + chip8->v[0];
             break;
 
         case 0xC:
             // CXNN - generates a random number, ANDs with NN, and puts the result in v[X]
+            chip8->v[x] = nn & rand();
             break;
 
         case 0xD:
@@ -218,18 +255,23 @@ void processNextInstruction(CHIP8* chip8) {
             switch(nn) {
                 case 0x07:
                     // FX07 - sets v[X] to the current value of the delay timer
+                    chip8->v[x] = chip8->delay_timer;
                     break;
 
                 case 0x15:
                     // FX15 - sets the delay timer to the value in v[X]
+                    chip8->delay_timer = chip8->v[x];
                     break;
 
                 case 0x18:
                     // FX18 - sets the sound timer to the value in v[X]
+                    chip8->sound_timer = chip8->v[x];
                     break;
 
                 case 0x1E:
                     // FX1E - sets idx = v[X] + idx (flag is set to 1 if idx overflows (> 0x0FFF) - this is ambiguous)
+                    chip8->idx += chip8->v[x];
+                    if (chip8->idx > 0x0FFF) chip8->v[15] = 1;
                     break;
 
                 case 0x0A:
@@ -238,18 +280,42 @@ void processNextInstruction(CHIP8* chip8) {
 
                 case 0x29:
                     // FX29 - sets idx to the address of the hexadecimal character in v[X]
+                    uint8_t hex_value = chip8->v[x];
+                    chip8->idx = hex_value*5;
                     break;
                 
                 case 0x33:
                     // FX33 - takes the number in v[X] (decimal) and places its digits in idx, idx+1, ...
+                    uint8_t decimal_value = chip8->v[x];
+                    uint8_t digits[3]; int k = 0;
+
+                    while(decimal_value > 0) {
+                        uint8_t d = decimal_value%10;
+                        decimal_value /= 10;
+                        digits[k] = d;
+                        k += 1; 
+                    }
+
+                    int aux = 0;
+                    for(int i = k-1; i >= 0; i--) {
+                        chip8->memory[chip8->idx+aux] = digits[i];
+                        aux++;
+                    }
+
                     break;
                 
                 case 0x55:
                     // FX55 - stores [v0, v1, ..., vx] in idx, idx+1, ..., idx+x (DONT UPDATE IDX - MODERN WAY)
+                    for(int i = 0; i <= x; i++) {
+                        chip8->memory[chip8->idx+i] = chip8->v[i];
+                    }
                     break;
                 
                 case 0x65:
                     // FX65 - takes the values stored in idx, idx+1, ... , idx+x and stores in v0, v1, ..., vx (DONT UPDATE IDX - MODERN WAY)
+                    for(int i = 0; i <= x; i++) {
+                        chip8->v[i] = chip8->memory[chip8->idx+i];
+                    }
                     break;
 
                 default:
@@ -261,9 +327,6 @@ void processNextInstruction(CHIP8* chip8) {
             break;
     }
 }
-
-
-
 
 
 void setDefaultFont(CHIP8* chip8);
