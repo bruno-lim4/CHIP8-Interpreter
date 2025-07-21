@@ -7,11 +7,11 @@
 #include "chip8.h"
 #include "display.h"
 
-#define X   (uint8_t) 0x0f00
-#define Y   (uint8_t) 0x00f0
-#define N   (uint8_t) 0x000f
-#define NN  (uint8_t) 0x00ff
-#define NNN (uint8_t) 0x0fff
+#define X   0x0f00
+#define Y   0x00f0
+#define N   0x000f
+#define NN  0x00ff
+#define NNN 0x0fff
 
 #define MEMORY_SIZE 4096
 
@@ -46,7 +46,8 @@ void processNextInstruction(CHIP8* chip8) {
     uint16_t inst = (chip8->memory[chip8->pc] << 8)|(chip8->memory[chip8->pc+1]);
     chip8->pc += 2; // update PC
 
-    uint8_t optype = ( (uint8_t)0xf000 )  & inst;
+    uint16_t optype = 0xf000  & inst;
+    optype >>= 12;
 
     uint8_t x = (inst & X) >> 8;
     uint8_t y = (inst & Y) >> 4;
@@ -62,6 +63,8 @@ void processNextInstruction(CHIP8* chip8) {
                     break;
                 case 0x0E0:
                     // 00E0 - clear the display (sets all the pixels to 0)
+                    cleanDisplay(chip8->display);
+                    updateDisplay(chip8->display);
                     break;
                 default:
                     break;
@@ -71,6 +74,7 @@ void processNextInstruction(CHIP8* chip8) {
         
         case 0x1:
             // 1NNN - sets PC to NNN
+            chip8->pc = nnn;
             break;
 
         case 0x2:
@@ -91,10 +95,12 @@ void processNextInstruction(CHIP8* chip8) {
 
         case 0x6:
             // 6XNN - sets the register v[X] to NN 
+            chip8->v[x] = nn;
             break;
 
         case 0x7:
             // 7XNN - adds the value NN to v[X] (carry flag is not affected)
+            chip8->v[x] += nn;
             break;
 
         case 0x8:
@@ -146,6 +152,7 @@ void processNextInstruction(CHIP8* chip8) {
 
         case 0xA:
             // ANNN - sets idx register to NNN
+            chip8->idx = nnn;
             break;
 
         case 0xB:
@@ -158,6 +165,38 @@ void processNextInstruction(CHIP8* chip8) {
 
         case 0xD:
             // DXYN - draw to the screen (complex)
+            int x_coord = chip8->v[x] & (DISPLAY_WIDTH-1);
+            int y_coord = chip8->v[y] & (DISPLAY_HEIGHT-1);
+
+            chip8->v[15] = 0;
+
+            for(int i = 0; i < n; i++) {
+                uint8_t sprite = chip8->memory[chip8->idx+i];
+
+                for(int k = 7; k >= 0; k--) {
+                    if (sprite&(1<<k)) {
+                        // TURN OFF pixel color
+                        if (getPixelColor(chip8->display, x_coord, y_coord)) {
+                            changePixelColor(chip8->display, x_coord, y_coord, 0);
+                            chip8->v[15] = 1;
+                        } else { // TURN ON
+                            changePixelColor(chip8->display, x_coord, y_coord, 1);
+                        }
+                    }
+
+                    x_coord++;
+                    if (x_coord >= DISPLAY_WIDTH) break;
+                }
+
+                // return to the beginning of the line
+                x_coord = chip8->v[x] & (DISPLAY_WIDTH-1);
+
+                y_coord++;
+                if (y_coord >= DISPLAY_HEIGHT) break;
+            }
+            
+            updateDisplay(chip8->display);
+
             break;
         
         case 0xE:
@@ -247,6 +286,9 @@ CHIP8* setupInterpreter(char* file_path) {
     // set Program Counter to 0x200
     chip8->pc = 0x200;
 
+    // inicialize timers
+    chip8->delay_timer = chip8->sound_timer = 0;
+
     // write the game file into chip8 memory
     for(int i = 0x200; i < MEMORY_SIZE; i++) {
         uint8_t data;
@@ -287,8 +329,18 @@ void setDefaultFont(CHIP8* chip8) {
     }
 }
 
+void updateTimers(CHIP8* chip8) {
+    if (chip8->delay_timer > 0) {
+        chip8->delay_timer--;
+    }
+
+    if (chip8->sound_timer > 0) {
+        chip8->sound_timer--;
+    }
+}
+
 void freeInterpreter(CHIP8* chip8) {
-    free(chip8->display);
+    freeDisplay(chip8->display);
     free(chip8);
     return;
 }
