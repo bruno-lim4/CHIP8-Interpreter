@@ -22,6 +22,8 @@
 */
 #define SHIFT_MODE 1
 
+const int commands[16] = {SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4, SDL_SCANCODE_Q, SDL_SCANCODE_W, SDL_SCANCODE_E, SDL_SCANCODE_R, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D,SDL_SCANCODE_F, SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_C, SDL_SCANCODE_V};
+
 struct chip8_ {
     // 4kb memory
     uint8_t memory[4096];
@@ -44,6 +46,16 @@ struct chip8_ {
 void processNextInstruction(CHIP8* chip8) {
     // get the instrucion pointed by PC
     uint16_t inst = (chip8->memory[chip8->pc] << 8)|(chip8->memory[chip8->pc+1]);
+
+    // program has ended
+    if (inst == 0) {
+        SDL_Event quit_event;
+        quit_event.type = SDL_QUIT;
+        SDL_PushEvent(&quit_event);
+        return;
+    }
+
+    //printf("pc: %d; inst: %04X\n", chip8->pc, inst);
     chip8->pc += 2; // update PC
 
     uint16_t optype = 0xf000  & inst;
@@ -237,13 +249,16 @@ void processNextInstruction(CHIP8* chip8) {
             break;
         
         case 0xE:
+            const uint8_t *keystate = SDL_GetKeyboardState(NULL);
             switch(nn) {
                 case 0x9E:
                     // EX9E - skips one instruction if the key corresponding to the value in v[X] is pressed
+                    if (keystate[commands[chip8->v[x]]]) chip8->pc += 2;
                     break;
 
                 case 0xA1:
                     // EXA1 - skips one instruction if the key corresponding to the value in v[X] is NOT pressed
+                    if (!keystate[commands[chip8->v[x]]]) chip8->pc += 2;
                     break;
 
                 default:
@@ -276,6 +291,25 @@ void processNextInstruction(CHIP8* chip8) {
 
                 case 0x0A:
                     // FX0A - blocking instruction until a key is pressed - sets v[X] to its hex value
+                    SDL_Event event;
+                    while(true) {
+                        if (SDL_WaitEvent(&event)) {
+                            if (event.type == SDL_QUIT) {
+                                SDL_PushEvent(&event);
+                                break;
+                            } else if (event.type == SDL_KEYDOWN) {
+                                SDL_Scancode sc = event.key.keysym.scancode;
+                                //printf("Scancode: %d (%s)\n", sc, SDL_GetScancodeName(sc));
+                                for(int i = 0; i < 16; i++) {
+                                    if (commands[i] == sc) {
+                                        chip8->v[x] = i;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
                     break;
 
                 case 0x29:

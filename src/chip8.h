@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include <SDL2/SDL.h>
+
 typedef struct chip8_ CHIP8;
 
 CHIP8* setupInterpreter(char* file_path);
