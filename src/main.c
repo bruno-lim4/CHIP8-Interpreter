@@ -4,15 +4,17 @@
 #include <SDL2/SDL.h>
 #include <time.h>
 
-#define INSTRUCIONS_PER_SECOND 700
+#define INSTRUCIONS_PER_SECOND 100
 
 uint32_t callback(uint32_t interval, void *param) {
+    printf("FUI CHAMADO\n");
     updateTimers((CHIP8*) param);
+    fflush(stdout);
     return interval;
 }
 
 int main() {
-    CHIP8* interpreter = setupInterpreter("games/IBM_logo.ch8");
+    CHIP8* interpreter = setupInterpreter("games/Airplane.ch8");
 
     srand(time(NULL));
     SDL_AddTimer(1000/60, callback, interpreter);
@@ -30,7 +32,7 @@ int main() {
             }
         }
 
-        // process instruction and updates screen/audio if necessary
+        // process instruction and updates screen if necessary
         processNextInstruction(interpreter);
 
         uint32_t t = SDL_GetTicks() - start_time;

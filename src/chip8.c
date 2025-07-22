@@ -148,42 +148,48 @@ void processNextInstruction(CHIP8* chip8) {
                 case 0x4:
                     // 8XY4 - sets v[X] = v[X] + v[Y] (if overflow -> flag register is set to 1)
                     uint16_t res = chip8->v[x] + chip8->v[y];
-                    if (res > 0xff) chip8->v[15] = 1;
                     chip8->v[x] += chip8->v[y];
+                    if (res > 0xff) chip8->v[15] = 1;
+                    else chip8->v[15] = 0;
 
                     break;
 
                 case 0x5:
                     // 8XY5 - sets v[X] = v[X] - v[Y] (if v[Y] > v[X], flag is 0, otherwise flag is 1)
-                    if (chip8->v[y] > chip8->v[x]) 
+                    if (chip8->v[y] > chip8->v[x]) {
+                        chip8->v[x] -= chip8->v[y]; 
                         chip8->v[15] = 0;
-                    else 
+                    } else {
+                        chip8->v[x] -= chip8->v[y];
                         chip8->v[15] = 1;
+                    }
                     
-                    chip8->v[x] -= chip8->v[y];
                     break;
 
                 case 0x6:
                     // 8XY6 - if !SHIFT_MODE (v[X] = v[Y]) -> v[x] >>= 1 and sets flag to the bit that was shifted out
                     if (!SHIFT_MODE) chip8->v[x] = chip8->v[y];
                     chip8->v[15] = 1&chip8->v[x];
+                    if (x == 15) break;
                     chip8->v[x] >>= 1;
                     break;
 
                 case 0x7:
                     // 8XY7 - sets v[X] = v[Y] - v[X] (if v[X] > v[Y], flag is 0, otherwise flag is 1)
-                    if (chip8->v[x] > chip8->v[y]) 
+                    if (chip8->v[x] > chip8->v[y]) {
+                        chip8->v[x] = chip8->v[y] - chip8->v[x];
                         chip8->v[15] = 0;
-                    else 
+                    } else {
+                        chip8->v[x] = chip8->v[y] - chip8->v[x];
                         chip8->v[15] = 1;
-                    
-                    chip8->v[x] = chip8->v[y] - chip8->v[x];
+                    }
                     break;
 
                 case 0xE:
                     // 8XYE - if !SHIFT_MODE (v[X] = v[Y]) -> v[x] <<= 1 and sets flag to the bit that was shifted out
                     if (!SHIFT_MODE) chip8->v[x] = chip8->v[y];
-                    chip8->v[15] = (1<<7)&chip8->v[x];
+                    chip8->v[15] = ((1<<7)&chip8->v[x]) >> 7;
+                    if (x == 15) break;
                     chip8->v[x] <<= 1;
                     break;
 
@@ -321,7 +327,7 @@ void processNextInstruction(CHIP8* chip8) {
                 case 0x33:
                     // FX33 - takes the number in v[X] (decimal) and places its digits in idx, idx+1, ...
                     uint8_t decimal_value = chip8->v[x];
-                    uint8_t digits[3]; int k = 0;
+                    uint8_t digits[3] = {0, 0, 0}; int k = 0;
 
                     while(decimal_value > 0) {
                         uint8_t d = decimal_value%10;
@@ -331,7 +337,7 @@ void processNextInstruction(CHIP8* chip8) {
                     }
 
                     int aux = 0;
-                    for(int i = k-1; i >= 0; i--) {
+                    for(int i = 2; i >= 0; i--) {
                         chip8->memory[chip8->idx+aux] = digits[i];
                         aux++;
                     }
@@ -383,6 +389,9 @@ CHIP8* setupInterpreter(char* file_path) {
     // set Program Counter to 0x200
     chip8->pc = 0x200;
 
+    // set stack pointer to 32
+    chip8->sp = 32;
+
     // inicialize timers
     chip8->delay_timer = chip8->sound_timer = 0;
 
@@ -427,12 +436,17 @@ void setDefaultFont(CHIP8* chip8) {
 }
 
 void updateTimers(CHIP8* chip8) {
+
+    printf("VALORES ATUAIS: D:%d; S:%d\n", chip8->delay_timer, chip8->sound_timer);
+
     if (chip8->delay_timer > 0) {
         chip8->delay_timer--;
+        printf("NEW DELAY: %d\n", chip8->delay_timer);
     }
 
     if (chip8->sound_timer > 0) {
         chip8->sound_timer--;
+        printf("NEW SOUND: %d\n", chip8->sound_timer);
     }
 }
 
