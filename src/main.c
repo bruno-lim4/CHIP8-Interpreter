@@ -4,7 +4,7 @@
 #include <SDL2/SDL.h>
 #include <time.h>
 
-#define INSTRUCIONS_PER_SECOND 100
+#define INSTRUCIONS_PER_SECOND 700
 
 uint32_t callback(uint32_t interval, void *param) {
     printf("FUI CHAMADO\n");

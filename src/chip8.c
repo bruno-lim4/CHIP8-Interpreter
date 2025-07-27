@@ -16,11 +16,15 @@
 #define MEMORY_SIZE 4096
 
 /*
- THIS IS RELATED TO THE AMBIGUOUS INSTRUCTION 8XY6/8XYE
+ THIS IS RELATED TO SOME AMBIGUOUS INSTRUCTIONS (QUIRKS)
  0: THE OLD WAY
  1: THE MODERN WAY
 */
-#define SHIFT_MODE 1
+#define SHIFT_MODE 0
+#define FLAG_RESET 0
+#define IDX_MODE 0
+#define JUMP_MODE 0
+
 
 const int commands[16] = {SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4, SDL_SCANCODE_Q, SDL_SCANCODE_W, SDL_SCANCODE_E, SDL_SCANCODE_R, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D,SDL_SCANCODE_F, SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_C, SDL_SCANCODE_V};
 
@@ -133,16 +137,19 @@ void processNextInstruction(CHIP8* chip8) {
                 case 0x1:
                     // 8XY1 - sets v[X] = v[X] | v[Y]
                     chip8->v[x] |= chip8->v[y];
+                    if (FLAG_RESET == 0) chip8->v[15] = 0;
                     break;
                 
                 case 0x2:
                     // 8XY2 - sets v[X] = v[X] & v[Y]
                     chip8->v[x] &= chip8->v[y];
+                    if (FLAG_RESET == 0) chip8->v[15] = 0;
                     break;
                 
                 case 0x3:
                     // 8XY3 - sets v[X] = v[X] ^ v[Y]
                     chip8->v[x] ^= chip8->v[y];
+                    if (FLAG_RESET == 0) chip8->v[15] = 0;
                     break;
 
                 case 0x4:
@@ -211,6 +218,7 @@ void processNextInstruction(CHIP8* chip8) {
         case 0xB:
             // BNNN - (ambiguous, implementing the most common way) - jumps to address NNN plus v[0]
             chip8->pc = nnn + chip8->v[0];
+            if (JUMP_MODE == 1) chip8->pc += chip8->v[x]; 
             break;
 
         case 0xC:
@@ -349,6 +357,7 @@ void processNextInstruction(CHIP8* chip8) {
                     for(int i = 0; i <= x; i++) {
                         chip8->memory[chip8->idx+i] = chip8->v[i];
                     }
+                    if (IDX_MODE == 0) chip8->idx += x+1;
                     break;
                 
                 case 0x65:
@@ -356,6 +365,7 @@ void processNextInstruction(CHIP8* chip8) {
                     for(int i = 0; i <= x; i++) {
                         chip8->v[i] = chip8->memory[chip8->idx+i];
                     }
+                    if (IDX_MODE == 0) chip8->idx += x+1;
                     break;
 
                 default:
