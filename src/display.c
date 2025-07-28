@@ -13,25 +13,34 @@ struct display_ {
     SDL_Renderer* renderer;
 };  
 
-// turn pixel at (x,y) on if c true. (update the renderer)
+// turn pixel at (x,y) on if c true
 void changePixelColor(DISPLAY* display, int x, int y, bool c) {
     if (c) {
-        SDL_SetRenderDrawColor(display->renderer, 255, 255, 255, 255);
         display->pixels[y][x] = 1;
     } else {
-        SDL_SetRenderDrawColor(display->renderer, 0, 0, 0, 255);
         display->pixels[y][x] = 0;
     }
-
-    SDL_Rect rect = { x * SCALE, y * SCALE, SCALE, SCALE };
-    SDL_RenderFillRect(display->renderer, &rect);
 }
 
 bool getPixelColor(DISPLAY* display, int x, int y) {
     return display->pixels[y][x];
 }
 
+// update de renderer and display it
 void updateDisplay(DISPLAY* display) {
+    SDL_SetRenderDrawColor(display->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(display->renderer);
+
+    SDL_SetRenderDrawColor(display->renderer, 255, 255, 255, 255);
+    for (int y = 0; y < DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < DISPLAY_WIDTH; x++) {
+            if (display->pixels[y][x]) {
+                SDL_Rect r = { x * SCALE, y * SCALE, SCALE, SCALE };
+                SDL_RenderFillRect(display->renderer, &r);
+            }
+        }
+    }
+
     SDL_RenderPresent(display->renderer);
 }
 
@@ -42,8 +51,6 @@ void cleanDisplay(DISPLAY* display) {
             display->pixels[i][j] = 0;
         }
     }
-    SDL_SetRenderDrawColor(display->renderer, 0, 0, 0, 255);
-    SDL_RenderClear(display->renderer);
 }
 
 DISPLAY* createDisplay() {

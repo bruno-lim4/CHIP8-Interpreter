@@ -25,8 +25,7 @@
 #define IDX_MODE 0
 #define JUMP_MODE 0
 
-
-const int commands[16] = {SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4, SDL_SCANCODE_Q, SDL_SCANCODE_W, SDL_SCANCODE_E, SDL_SCANCODE_R, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D,SDL_SCANCODE_F, SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_C, SDL_SCANCODE_V};
+const int commands[16] = {SDL_SCANCODE_X, SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_Q, SDL_SCANCODE_W, SDL_SCANCODE_E, SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D, SDL_SCANCODE_Z,SDL_SCANCODE_C, SDL_SCANCODE_4, SDL_SCANCODE_R, SDL_SCANCODE_F, SDL_SCANCODE_V};
 
 struct chip8_ {
     // 4kb memory
@@ -45,7 +44,38 @@ struct chip8_ {
 
     // general-purpose registers (v[15] is the flag register)
     uint8_t v[16];
+ 
+    bool waiting_key, needs_to_draw; 
+    uint8_t key_register;
 };
+
+void drawDisplay(CHIP8* chip8) {
+    updateDisplay(chip8->display);
+    chip8->needs_to_draw = false;
+}
+
+bool needsToDraw(CHIP8* chip8) {
+    return chip8->needs_to_draw;
+}
+
+bool waitingForKey(CHIP8* chip8) {
+    return chip8->waiting_key;
+}
+
+void handleKeyPressed(CHIP8* chip8, SDL_Event* event) {
+    if ((*event).type == SDL_KEYDOWN) {
+        SDL_Scancode sc = (*event).key.keysym.scancode;
+        //printf("Scancode: %d (%s)\n", sc, SDL_GetScancodeName(sc));
+        for(int i = 0; i < 16; i++) {
+            if (commands[i] == sc) {
+                chip8->v[chip8->key_register] = i;
+                break;
+            }
+        }
+    }
+
+    chip8->waiting_key = false;
+}
 
 void processNextInstruction(CHIP8* chip8) {
     // get the instrucion pointed by PC
@@ -82,7 +112,7 @@ void processNextInstruction(CHIP8* chip8) {
                 case 0x0E0:
                     // 00E0 - clear the display (sets all the pixels to 0)
                     cleanDisplay(chip8->display);
-                    updateDisplay(chip8->display);
+                    chip8->needs_to_draw = true;
                     break;
                 default:
                     break;
@@ -258,7 +288,7 @@ void processNextInstruction(CHIP8* chip8) {
                 if (y_coord >= DISPLAY_HEIGHT) break;
             }
             
-            updateDisplay(chip8->display);
+            chip8->needs_to_draw = true;
 
             break;
         
@@ -305,6 +335,10 @@ void processNextInstruction(CHIP8* chip8) {
 
                 case 0x0A:
                     // FX0A - blocking instruction until a key is pressed - sets v[X] to its hex value
+
+                    chip8->waiting_key = true;
+                    chip8->key_register = x;
+
                     SDL_Event event;
                     while(true) {
                         if (SDL_WaitEvent(&event)) {
@@ -405,6 +439,9 @@ CHIP8* setupInterpreter(char* file_path) {
     // inicialize timers
     chip8->delay_timer = chip8->sound_timer = 0;
 
+
+    chip8->waiting_key = chip8->needs_to_draw = false;
+
     // write the game file into chip8 memory
     for(int i = 0x200; i < MEMORY_SIZE; i++) {
         uint8_t data;
@@ -446,17 +483,12 @@ void setDefaultFont(CHIP8* chip8) {
 }
 
 void updateTimers(CHIP8* chip8) {
-
-    printf("VALORES ATUAIS: D:%d; S:%d\n", chip8->delay_timer, chip8->sound_timer);
-
     if (chip8->delay_timer > 0) {
         chip8->delay_timer--;
-        printf("NEW DELAY: %d\n", chip8->delay_timer);
     }
 
     if (chip8->sound_timer > 0) {
         chip8->sound_timer--;
-        printf("NEW SOUND: %d\n", chip8->sound_timer);
     }
 }
 
