@@ -8,7 +8,7 @@
 #define DISPLAY_HZ 60.0
 #define TIMERS_HZ 60.0
 
-int main() {
+int main(int argc, char* argv[]) {
     srand(time(NULL));
 
     const double cpu_interval_ms = 1000.0/CPU_HZ;
@@ -18,7 +18,7 @@ int main() {
     double cpu_accumulator, display_accumulator, timers_accumulator;
     cpu_accumulator = display_accumulator = timers_accumulator = 0.0;
 
-    CHIP8* interpreter = setupInterpreter("games/MERLIN");
+    CHIP8* interpreter = setupInterpreter(argv[1]);
 
     SDL_Event event;
     int running = 1;
@@ -30,7 +30,7 @@ int main() {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
-            } else if (event.type == SDL_KEYDOWN && waitingForKey(interpreter))
+            } else if (event.type == SDL_KEYUP && waitingForKey(interpreter))
                 handleKeyPressed(interpreter, &event);
         }
 

@@ -63,7 +63,7 @@ bool waitingForKey(CHIP8* chip8) {
 }
 
 void handleKeyPressed(CHIP8* chip8, SDL_Event* event) {
-    if ((*event).type == SDL_KEYDOWN) {
+    if ((*event).type == SDL_KEYUP) {
         SDL_Scancode sc = (*event).key.keysym.scancode;
         //printf("Scancode: %d (%s)\n", sc, SDL_GetScancodeName(sc));
         for(int i = 0; i < 16; i++) {
